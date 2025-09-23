@@ -1,5 +1,5 @@
-Drivers/STM32U0xx_HAL_Driver/stm32u0xx_hal_cortex.o: \
- C:/Users/yee-kong.chong/Documents/Development/STM32_ExampleCode/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_cortex.c \
+Drivers/STM32U0xx_HAL_Driver/stm32u0xx_hal_rtc_ex.o: \
+ C:/Users/yee-kong.chong/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_rtc_ex.c \
  C:/Users/yee-kong.chong/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal.h \
  ../../Inc/stm32u0xx_hal_conf.h \
  C:/Users/yee-kong.chong/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_rcc.h \

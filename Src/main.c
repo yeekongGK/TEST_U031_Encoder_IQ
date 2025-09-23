@@ -23,6 +23,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+//#include "stm32u0xx_ll_lptim.h"
+//#include "stm32u0xx_hal_lptim.h"
 #include "stm32u0xx_nucleo.h"
 #include <stdio.h>
 #include <string.h>
@@ -47,20 +49,86 @@
 
 /* Private variables ---------------------------------------------------------*/
 
+LPTIM_HandleTypeDef hlptim1;
+
+RTC_HandleTypeDef hrtc;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+#define TRACSENS_CFG_AUTORELOAD_VALUE 0xFFFF
+
 #define LED_TOGGLE_DELAY         100
 static __IO uint32_t TimingDelay;
+
+
+typedef enum
+{
+	NORMAL_CounterMode,
+	INVERT_CounterMode,
+}PULSER_CounterMode_t;
+
+typedef enum
+{
+	UNKNOWN_CounterDirection,
+	FORWARD_CounterDirection,
+	BACKWARD_CounterDirection,
+}PULSER_CounterDirection_t;
+
+static PULSER_CounterMode_t eMode= NORMAL_CounterMode;
+static uint16_t uwCompareValue;
+
+static PULSER_CounterDirection_t eCounterDirection= UNKNOWN_CounterDirection;
+static int32_t lCntrMultiplier= 0;
+static int32_t lCntrErrorReading= 0;
+
+typedef enum
+{
+	NONE_CounterErrorState= 0,
+	FWD_EXPECTING_BWD_CounterErrorState,
+	BWD_EXPECTING_FWD_CounterErrorState,
+	FWD_EXPECTING_BWD_END_CounterErrorState,
+	BWD_EXPECTING_FWD_END_CounterErrorState,
+}TRACSENS_CounterErrorState_t;
+
+typedef struct
+{
+	bool enableErrorPatternCheck;
+	bool useCompensatedValue;
+	uint16_t errorPatternConfirmationCount;
+
+	int32_t rteOffsetValue;
+	int32_t rteLastSavedValue;
+	uint32_t rteErrorPatternCount;
+	bool rteErrorPatternCompensationStarted;
+	TRACSENS_CounterErrorState_t rteErrorPatternState;
+	int32_t rteErrorPatternPreviousPulse;
+	bool rteErrorPatternJustStarted;
+}TRACSENS_t;
+
+static TRACSENS_t *pConfig;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
-void UART_Printf(char *format, ...);
+static void MX_LPTIM1_Init(void);
+static void MX_RTC_Init(void);
 /* USER CODE BEGIN PFP */
 static void SYSCLKConfig_STOP(void);
+
+void TRACSENS_StartCounting();
+void TRACSENS_DisplayInfo(void);
+static int32_t TRACSENS_GetCounter(void);
+void TRACSENS_CompareCallback(LPTIM_HandleTypeDef *hlptim);
+void TRACSENS_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim);
+void TRACSENS_CounterChangedToUpCallback(LPTIM_HandleTypeDef *hlptim);
+void TRACSENS_CounterChangedToDownCallback(LPTIM_HandleTypeDef *hlptim);
+void TRACSENS_ChangedToUpErrorHandling(void);
+void TRACSENS_ChangedToDownErrorHandling(void);
+static void TRACSENS_Power(bool _enable);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -99,8 +167,10 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-  // MX_GPIO_Init();
+  MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_LPTIM1_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
   /* Enable Power Clock */
   __HAL_RCC_PWR_CLK_ENABLE();
@@ -108,7 +178,23 @@ int main(void)
   /* Ensure that MSI is wake-up system clock */
   __HAL_RCC_WAKEUPSTOP_CLK_CONFIG(RCC_STOP_WAKEUPCLOCK_MSI);
 
-  UART_Printf("main start\r\n");
+  //==========================================================
+  TRACSENS_StartCounting();
+  
+	if (HAL_LPTIM_Counter_Start_IT(&hlptim1) != HAL_OK)
+	{
+    Error_Handler();
+	}
+  
+	/* Disable autoreload write complete interrupt */
+	__HAL_LPTIM_DISABLE_IT(&hlptim1, LPTIM_IT_ARROK);
+  
+	uint32_t value = LL_LPTIM_OC_GetCompareCH1(LPTIM1);
+  
+  UART_Printf("main start %d\r\n",value);
+  TRACSENS_DisplayInfo();
+  //==========================================================
+
   uint8_t index = 0;
   /* USER CODE END 2 */
 
@@ -122,6 +208,7 @@ int main(void)
     /* Insert 5 second delay */
     UART_Printf("%d\r\n",index);
     index++;
+    TRACSENS_DisplayInfo();
     HAL_Delay(3000);
     /* Turn off LED4 */
     BSP_LED_Off(LED4);
@@ -156,7 +243,8 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_11;
@@ -184,6 +272,81 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief LPTIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_LPTIM1_Init(void)
+{
+
+  /* USER CODE BEGIN LPTIM1_Init 0 */
+
+  /* USER CODE END LPTIM1_Init 0 */
+
+  /* USER CODE BEGIN LPTIM1_Init 1 */
+
+  /* USER CODE END LPTIM1_Init 1 */
+  hlptim1.Instance = LPTIM1;
+  hlptim1.Init.Clock.Source = LPTIM_CLOCKSOURCE_APBCLOCK_LPOSC;
+  hlptim1.Init.Clock.Prescaler = LPTIM_PRESCALER_DIV1;
+  hlptim1.Init.UltraLowPowerClock.Polarity = LPTIM_CLOCKPOLARITY_RISING;
+  hlptim1.Init.UltraLowPowerClock.SampleTime = LPTIM_CLOCKSAMPLETIME_DIRECTTRANSITION;
+  hlptim1.Init.Trigger.Source = LPTIM_TRIGSOURCE_SOFTWARE;
+  hlptim1.Init.Period = 65535;
+  hlptim1.Init.UpdateMode = LPTIM_UPDATE_IMMEDIATE;
+  hlptim1.Init.CounterSource = LPTIM_COUNTERSOURCE_EXTERNAL;
+  hlptim1.Init.Input1Source = LPTIM_INPUT1SOURCE_GPIO;
+  hlptim1.Init.Input2Source = LPTIM_INPUT2SOURCE_GPIO;
+  hlptim1.Init.RepetitionCounter = 0;
+  if (HAL_LPTIM_Init(&hlptim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN LPTIM1_Init 2 */
+
+  /* USER CODE END LPTIM1_Init 2 */
+
+}
+
+/**
+  * @brief RTC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_RTC_Init(void)
+{
+
+  /* USER CODE BEGIN RTC_Init 0 */
+
+  /* USER CODE END RTC_Init 0 */
+
+  /* USER CODE BEGIN RTC_Init 1 */
+
+  /* USER CODE END RTC_Init 1 */
+
+  /** Initialize RTC Only
+  */
+  hrtc.Instance = RTC;
+  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+  hrtc.Init.AsynchPrediv = 127;
+  hrtc.Init.SynchPrediv = 255;
+  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
+  hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+  hrtc.Init.OutPutPullUp = RTC_OUTPUT_PULLUP_NONE;
+  hrtc.Init.BinMode = RTC_BINARY_NONE;
+  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN RTC_Init 2 */
+
+  /* USER CODE END RTC_Init 2 */
+
 }
 
 /**
@@ -276,6 +439,221 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+//===========================================================
+
+void TRACSENS_DisplayInfo(void)
+{
+	static int32_t _prevPulse= 0;
+	int32_t _currPulse= TRACSENS_GetCounter();
+//	if(_prevPulse!= _currPulse)
+//	{
+//		_prevPulse= _currPulse;
+
+		UART_Printf("#stat:mag2: display > curr: %d errCnt: %d errState: %d errPulse: %d\r\n",
+				_currPulse, pConfig->rteErrorPatternCount, pConfig->rteErrorPatternState, pConfig->rteErrorPatternPreviousPulse);
+//	}
+}
+
+static int32_t TRACSENS_GetCounter(void)
+{
+	int32_t _value;
+    do/* 2 consecutive readings need to be the same*/
+    {
+    	_value= LL_LPTIM_GetCounter(LPTIM1);
+    }while(LL_LPTIM_GetCounter(LPTIM1)!= _value);
+
+//	if(INVERT_CounterMode== eMode)
+//	{
+//		_value= 0xFFFF& ((TRACSENS_CFG_AUTORELOAD_VALUE+ 1)- _value);
+//	}
+//
+//    _value+= (lCntrMultiplier* (TRACSENS_CFG_AUTORELOAD_VALUE+ 1));
+
+    return _value;
+}
+
+void TRACSENS_CompareCallback(LPTIM_HandleTypeDef *hlptim)
+{
+	UART_Printf("TRACSENS_CompareCallback\n\r");
+	if(UNKNOWN_CounterDirection== eCounterDirection)/*initially we don't know. we choose forward cos this compare confirming it forward*/
+	{
+		eCounterDirection= FORWARD_CounterDirection;
+	}
+
+	//DBG_Print("CompareCallback:%d, multiplier:%d \r\n", eCounterDirection, lCntrMultiplier);
+}
+
+void TRACSENS_CounterChangedToUpCallback(LPTIM_HandleTypeDef *hlptim)
+{
+	UART_Printf("TRACSENS_CounterChangedToUpCallback\n\r");
+	eCounterDirection= FORWARD_CounterDirection;
+
+	if(true== pConfig->enableErrorPatternCheck)
+	{
+		TRACSENS_ChangedToUpErrorHandling();
+	}
+
+	//DBG_Print("CounterChangedToUpCallback:%d, multiplier:%d \r\n", eCounterDirection, lCntrMultiplier);
+}
+
+void TRACSENS_CounterChangedToDownCallback(LPTIM_HandleTypeDef *hlptim)
+{
+	UART_Printf("TRACSENS_CounterChangedToDownCallback\n\r");
+	eCounterDirection= BACKWARD_CounterDirection;
+
+	if(true== pConfig->enableErrorPatternCheck)
+	{
+		TRACSENS_ChangedToDownErrorHandling();
+	}
+
+	//DBG_Print("CounterChangedToDownCallback:%d, multiplier:%d \r\n", eCounterDirection, lCntrMultiplier);
+}
+
+void TRACSENS_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim)
+{
+	UART_Printf("TRACSENS_AutoReloadMatchCallback\n\r");
+	if(UNKNOWN_CounterDirection== eCounterDirection)/*initially we don't know. we choose backward cos we have a compare int to choose forward*/
+	{
+		eCounterDirection= BACKWARD_CounterDirection;
+	}
+
+	/*check and set cos sometimes direction interrupt will occur simultaneously with ARR interrupt, but served after ARR*/
+	if(LL_LPTIM_IsActiveFlag_UP(LPTIM1))
+	{
+		if(NORMAL_CounterMode== eMode)
+		{
+			eCounterDirection= FORWARD_CounterDirection;
+		}
+		else if(INVERT_CounterMode== eMode)
+		{
+			eCounterDirection= BACKWARD_CounterDirection;
+		}
+	}
+	else if(LL_LPTIM_IsActiveFlag_DOWN(LPTIM1))
+	{
+		if(NORMAL_CounterMode== eMode)
+		{
+			eCounterDirection= BACKWARD_CounterDirection;
+		}
+		else if(INVERT_CounterMode== eMode)
+		{
+			eCounterDirection= FORWARD_CounterDirection;
+		}
+	}
+
+	if(FORWARD_CounterDirection== eCounterDirection)
+	{
+		lCntrMultiplier++;
+	}
+	else if(BACKWARD_CounterDirection== eCounterDirection)
+	{
+		lCntrMultiplier--;
+	}
+
+	//DBG_Print("AutoReloadMatchCallback:%d, multiplier:%d \r\n", eCounterDirection, lCntrMultiplier);
+}
+void TRACSENS_StartCounting()
+{
+	TRACSENS_Power(true);
+
+	if(NORMAL_CounterMode== eMode)
+	{
+		HAL_LPTIM_RegisterCallback(&hlptim1, HAL_LPTIM_COMPARE_MATCH_CB_ID, TRACSENS_CompareCallback);
+		HAL_LPTIM_RegisterCallback(&hlptim1, HAL_LPTIM_AUTORELOAD_MATCH_CB_ID, TRACSENS_AutoReloadMatchCallback);
+		HAL_LPTIM_RegisterCallback(&hlptim1, HAL_LPTIM_DIRECTION_UP_CB_ID, TRACSENS_CounterChangedToUpCallback);
+		HAL_LPTIM_RegisterCallback(&hlptim1, HAL_LPTIM_DIRECTION_DOWN_CB_ID, TRACSENS_CounterChangedToDownCallback);
+	}
+	else if(INVERT_CounterMode== eMode)
+	{
+		HAL_LPTIM_RegisterCallback(&hlptim1, HAL_LPTIM_COMPARE_MATCH_CB_ID, TRACSENS_CompareCallback);
+		HAL_LPTIM_RegisterCallback(&hlptim1, HAL_LPTIM_AUTORELOAD_MATCH_CB_ID, TRACSENS_AutoReloadMatchCallback);
+		HAL_LPTIM_RegisterCallback(&hlptim1, HAL_LPTIM_DIRECTION_UP_CB_ID, TRACSENS_CounterChangedToDownCallback);
+		HAL_LPTIM_RegisterCallback(&hlptim1, HAL_LPTIM_DIRECTION_DOWN_CB_ID, TRACSENS_CounterChangedToUpCallback);
+	}
+
+	uwCompareValue=0x01;/*used once to detect direction*/
+
+//	LL_LPTIM_EnableIT_CC1(LPTIM1);		/*Enable the Compare Match interrupt for Channel 1 */
+//	LL_LPTIM_EnableIT_ARRM(LPTIM1); 	/*Enable autoreload match interrupt (ARRMIE).*/
+//	LL_LPTIM_EnableIT_UP(LPTIM1);		/*Enable direction change to up interrupt (UPIE).*/
+//	LL_LPTIM_EnableIT_DOWN(LPTIM1);		/*Enable direction change to down interrupt (DOWNIE).*/
+
+	LL_LPTIM_OC_SetCompareCH1(LPTIM1, 11);
+//	LL_LPTIM_SetCompare(LPTIM1, uwCompareValue);/*we need this to know the initial pulse direction(which we don't know after reset)*/
+
+	LL_LPTIM_SetEncoderMode(LPTIM1, LL_LPTIM_ENCODER_MODE_RISING_FALLING);
+    LL_LPTIM_EnableEncoderMode(LPTIM1);
+    LL_LPTIM_Enable(LPTIM1);
+	LL_LPTIM_SetAutoReload(LPTIM1, TRACSENS_CFG_AUTORELOAD_VALUE);
+    LL_LPTIM_StartCounter(LPTIM1, LL_LPTIM_OPERATING_MODE_CONTINUOUS);
+    //LPTIM_FeedExternalClock();/*needed when using external clock in counter mode*/
+
+    /*this is needed during power up as we always get extra pulse a bit while after start counting*/
+	HAL_Delay(1);	/*when reboot, we get extra pulse*/
+
+	do/* 2 consecutive readings need to be the same*/
+    {
+    	lCntrErrorReading= LL_LPTIM_GetCounter(LPTIM1);
+    }while(LL_LPTIM_GetCounter(LPTIM1)!= lCntrErrorReading);
+
+	//DBG_Print("lCntrErrorReading: %d.\r\n", lCntrErrorReading);
+}
+
+void TRACSENS_ChangedToUpErrorHandling(void)
+{
+	if(BWD_EXPECTING_FWD_CounterErrorState== pConfig->rteErrorPatternState)
+	{
+		pConfig->rteErrorPatternState= FWD_EXPECTING_BWD_END_CounterErrorState;
+	}
+
+}
+
+void TRACSENS_ChangedToDownErrorHandling(void)
+{
+	int32_t _curr= TRACSENS_GetCounter();
+	if(0!= (_curr- pConfig->rteErrorPatternPreviousPulse))
+	{
+		pConfig->rteErrorPatternState= NONE_CounterErrorState; /*reset if we get real pulse inbetween error pattern*/
+		pConfig->rteErrorPatternJustStarted= false;
+		if(false== pConfig->rteErrorPatternCompensationStarted)
+		{
+			pConfig->rteErrorPatternCount= 0;/*we need consecutive error pattern to mark the meter as erroneous that we can handle*/
+			//DBG_Print("#stat:mag2: errorPatternCountCleared >\r\n");
+		}
+	}
+	if(NONE_CounterErrorState== pConfig->rteErrorPatternState)
+	{
+		pConfig->rteErrorPatternJustStarted= true;
+		pConfig->rteErrorPatternState= BWD_EXPECTING_FWD_CounterErrorState;
+	}
+	else if(FWD_EXPECTING_BWD_CounterErrorState== pConfig->rteErrorPatternState)
+	{
+		pConfig->rteErrorPatternState= BWD_EXPECTING_FWD_END_CounterErrorState;
+	}
+	else if(FWD_EXPECTING_BWD_END_CounterErrorState== pConfig->rteErrorPatternState)
+	{
+		pConfig->rteErrorPatternCount++;
+		if(true== pConfig->rteErrorPatternJustStarted)
+		{
+			pConfig->rteErrorPatternJustStarted= false;
+			pConfig->rteErrorPatternCount++;
+		}
+
+		if((false== pConfig->rteErrorPatternCompensationStarted)&& (pConfig->errorPatternConfirmationCount<= pConfig->rteErrorPatternCount))
+		{
+			pConfig->rteErrorPatternCompensationStarted= true;
+			//DBG_Print("#stat:mag2: errorPatternCompensationStarted > \r\n");
+		}
+		pConfig->rteErrorPatternState= BWD_EXPECTING_FWD_CounterErrorState;
+	}
+	pConfig->rteErrorPatternPreviousPulse= _curr;
+}
+
+static void TRACSENS_Power(bool _enable)
+{
+}
+//===========================================================
 
 /**
   * @brief  Configures system clock after wake-up from STOP: enable HSE, PLL

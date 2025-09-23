@@ -101,6 +101,11 @@
 			<locationURI>PARENT-6-PROJECT_LOC/Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_gpio.c</locationURI>
 		</link>
 		<link>
+			<name>Drivers/STM32U0xx_HAL_Driver/stm32u0xx_hal_lptim.c</name>
+			<type>1</type>
+			<locationURI>PARENT-10-PROJECT_LOC/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_lptim.c</locationURI>
+		</link>
+		<link>
 			<name>Drivers/STM32U0xx_HAL_Driver/stm32u0xx_hal_pwr.c</name>
 			<type>1</type>
 			<locationURI>PARENT-6-PROJECT_LOC/Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_pwr.c</locationURI>
@@ -119,6 +124,16 @@
 			<name>Drivers/STM32U0xx_HAL_Driver/stm32u0xx_hal_rcc_ex.c</name>
 			<type>1</type>
 			<locationURI>PARENT-6-PROJECT_LOC/Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_rcc_ex.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/STM32U0xx_HAL_Driver/stm32u0xx_hal_rtc.c</name>
+			<type>1</type>
+			<locationURI>PARENT-10-PROJECT_LOC/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_rtc.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/STM32U0xx_HAL_Driver/stm32u0xx_hal_rtc_ex.c</name>
+			<type>1</type>
+			<locationURI>PARENT-10-PROJECT_LOC/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Src/stm32u0xx_hal_rtc_ex.c</locationURI>
 		</link>
 		<link>
 			<name>Drivers/STM32U0xx_HAL_Driver/stm32u0xx_hal_tim.c</name>
