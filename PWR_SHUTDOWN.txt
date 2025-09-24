@@ -1,0 +1,70 @@
+Configuration	PWR_SHUTDOWN
+STM32CubeMX 	6.15.0
+Date	09/24/2025
+MCU	STM32U031R8Tx
+
+
+
+PERIPHERALS	MODES	FUNCTIONS	PINS
+LPTIM1	Encoder mode from IN1 IN2	LPTIM1_IN1	PC0
+LPTIM1	Encoder mode from IN1 IN2	LPTIM1_IN2	PC2
+PWR:Security/Privilege attributes	Privilege attributes	PWR_VS_SECSignals	VP_PWR_VS_SECSignals
+RTC	Activate RTC Clock Source	RTC_VS_RTC_Activate	VP_RTC_VS_RTC_Activate
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+USART2	Asynchronous	USART2_RX	PA3
+USART2	Asynchronous	USART2_TX	PA2
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+2	PC13	GPIO_EXTI13	BUTTON_USER
+8	PC0	LPTIM1_IN1	
+10	PC2	LPTIM1_IN2	
+16	PA2	USART2_TX	
+17	PA3	USART2_RX	
+21	PA5	GPIO_Output	LED2
+PERIPHERALS	MODES	FUNCTIONS	PINS
+LPTIM1	Encoder mode from IN1 IN2	LPTIM1_IN1	PC0
+LPTIM1	Encoder mode from IN1 IN2	LPTIM1_IN2	PC2
+PWR:Security/Privilege attributes	Privilege attributes	PWR_VS_SECSignals	VP_PWR_VS_SECSignals
+RTC	Activate RTC Clock Source	RTC_VS_RTC_Activate	VP_RTC_VS_RTC_Activate
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+USART2	Asynchronous	USART2_RX	PA3
+USART2	Asynchronous	USART2_TX	PA2
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+2	PC13	GPIO_EXTI13	BUTTON_USER
+8	PC0	LPTIM1_IN1	
+10	PC2	LPTIM1_IN2	
+16	PA2	USART2_TX	
+17	PA3	USART2_RX	
+21	PA5	GPIO_Output	LED2
+
+
+
+SOFTWARE PROJECT
+
+Project Settings : 
+Project Name : PWR_SHUTDOWN
+Project Folder : C:\Users\yee-kong.chong\Documents\Development\STM32_ExampleCode\STM32Cube_FW_U0_V1.3.0\Projects\NUCLEO-U031R8\Examples\PWR\PWR_SHUTDOWN_Copy
+Toolchain / IDE : STM32CubeIDE
+Firmware Package Name and Version : STM32Cube FW_U0 V1.3.0
+
+
+Code Generation Settings : 
+STM32Cube MCU packages and embedded software packs : Add necessary library files as reference in the toolchain project configuration file
+Generate peripheral initialization as a pair of '.c/.h' files per peripheral : No
+Backup previously generated files when re-generating : No
+Delete previously generated files when not re-generated : Yes
+Set all free pins as analog (to optimize the power consumption) : No
+
+
+Toolchains Settings : 
+Compiler Optimizations : 
+
+
+
+
+

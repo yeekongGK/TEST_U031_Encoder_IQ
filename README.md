@@ -1,3 +1,6 @@
+File location STM32Cube_FW_U0_V1.3.0\Projects\NUCLEO-U031R8\Examples\PWR\PWR_SHUTDOWN
+
+
 ## <b>PWR_SHUTDOWN Example Description</b>
 
 how to enter the system in SHUTDOWN mode and wake-up from this
