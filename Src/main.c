@@ -198,18 +198,18 @@ int main(void)
 	}
   
 	/* Disable autoreload write complete interrupt */
-	__HAL_LPTIM_DISABLE_IT(&hlptim1, LPTIM_IT_ARROK);
+	// __HAL_LPTIM_DISABLE_IT(&hlptim1, LPTIM_IT_ARROK);
   
-	uint32_t value = LL_LPTIM_OC_GetCompareCH1(LPTIM1);
+	// uint32_t value = LL_LPTIM_OC_GetCompareCH1(LPTIM1);
   
-  UART_Printf("main start %ld\r\n",value);
+  // UART_Printf("main start %ld\r\n",value);
+  UART_Printf("main start \r\n");
   
   // Initialize the last counter value on startup
   lLastCounterValue = TRACSENS_GetCounter();
-  TRACSENS_DisplayInfo();
+  // TRACSENS_DisplayInfo();
   //==========================================================
 
-  uint8_t index = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -220,8 +220,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     /* Insert 5 second delay */
-    UART_Printf("%d\r\n",index);
-    index++;
     TRACSENS_DisplayInfo();
     HAL_Delay(3000);
     /* Turn off LED4 */
@@ -548,7 +546,7 @@ void TRACSENS_CounterChangedToUpCallback(LPTIM_HandleTypeDef *hlptim)
 	{
 		TRACSENS_ChangedToUpErrorHandling();
 	}
-	// UART_Printf("Direction changed to UP (Forward)\r\n"); // Optional: can be noisy
+	UART_Printf("Direction changed to UP (Forward)\r\n"); // Optional: can be noisy
 }
 
 /**
@@ -568,7 +566,7 @@ void TRACSENS_CounterChangedToDownCallback(LPTIM_HandleTypeDef *hlptim)
 	{
 		TRACSENS_ChangedToDownErrorHandling();
 	}
-	// UART_Printf("Direction changed to DOWN (Backward)\r\n"); // Optional: can be noisy
+	UART_Printf("Direction changed to DOWN (Backward)\r\n"); // Optional: can be noisy
 }
 
 /**
@@ -585,6 +583,7 @@ void TRACSENS_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim)
    * We check the last known direction, set by the Up/Down callbacks,
    * to determine if it was an overflow or an underflow.
    */
+  int32_t current_value;
   if (eCounterDirection == FORWARD_CounterDirection)
   {
     /* OVERFLOW: If counting forward, a wrap-around from 0xFFFF to 0x0000 has occurred.
@@ -598,9 +597,25 @@ void TRACSENS_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim)
      * Decrement the multiplier.
      */
     lCntrMultiplier--;
+  }else
+  {
+    current_value = TRACSENS_GetCounter();
+	
+    if (current_value != 0)
+    {
+      // 65535 = underflow
+      lCntrMultiplier--;
+      eCounterDirection= BACKWARD_CounterDirection; 
+    }
+    else
+    {
+      // 0 = overflow
+      lCntrMultiplier++;
+      eCounterDirection= FORWARD_CounterDirection; 
+    }
   }
 
-  // UART_Printf("AutoReloadMatchCallback: Dir=%d, Multiplier=%ld\r\n", eCounterDirection, lCntrMultiplier); // Optional: can be noisy
+  UART_Printf("AutoReloadMatchCallback: Dir=%d, Multiplier=%ld, curr=%ld\r\n", eCounterDirection, lCntrMultiplier, current_value); // Optional: can be noisy
 }
 
 void TRACSENS_StartCounting()
