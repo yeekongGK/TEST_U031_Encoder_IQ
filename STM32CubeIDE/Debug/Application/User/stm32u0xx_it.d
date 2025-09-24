@@ -34,6 +34,7 @@ Application/User/stm32u0xx_it.o: \
  C:/Users/yee-kong.chong/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_uart.h \
  C:/Users/yee-kong.chong/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_uart_ex.h \
  ../../Inc/stm32u0xx_it.h \
+ C:/Users/yee-kong.chong/Documents/Development/STM32_ExampleCode/STM32Cube_FW_U0_V1.3.0/Projects/NUCLEO-U031R8/Examples/PWR/PWR_SHUTDOWN_Copy/STM32CubeIDE/Application/User/tracsens_io.h \
  ../../../../../../../Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo.h \
  ../../Inc/stm32u0xx_nucleo_conf.h \
  ../../../../../../../Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo_errno.h
@@ -71,6 +72,7 @@ C:/Users/yee-kong.chong/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM3
 C:/Users/yee-kong.chong/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_uart.h:
 C:/Users/yee-kong.chong/STM32Cube/Repository/STM32Cube_FW_U0_V1.3.0/Drivers/STM32U0xx_HAL_Driver/Inc/stm32u0xx_hal_uart_ex.h:
 ../../Inc/stm32u0xx_it.h:
+C:/Users/yee-kong.chong/Documents/Development/STM32_ExampleCode/STM32Cube_FW_U0_V1.3.0/Projects/NUCLEO-U031R8/Examples/PWR/PWR_SHUTDOWN_Copy/STM32CubeIDE/Application/User/tracsens_io.h:
 ../../../../../../../Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo.h:
 ../../Inc/stm32u0xx_nucleo_conf.h:
 ../../../../../../../Drivers/BSP/STM32U0xx_Nucleo/stm32u0xx_nucleo_errno.h:

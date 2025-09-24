@@ -1,0 +1,27 @@
+# STM32CubeIDE / Eclipse settings
+# .settings/
+# .cproject
+# .project
+
+# Build outputs
+Debug/
+Release/
+*.o
+*.d
+*.elf
+*.map
+*.lst
+# *.bin
+# *.hex
+
+# CubeIDE generated core dumps / logs
+*.launch
+*.log
+
+# CubeMX auto-generated backup files
+*.ioc-bkp
+
+# System files
+*.swp
+*.DS_Store
+Thumbs.db

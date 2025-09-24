@@ -22,6 +22,7 @@
 #include "stm32u0xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "tracsens_io.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -132,7 +133,7 @@ void TIM6_DAC_LPTIM1_IRQHandler(void)
   /* USER CODE BEGIN TIM6_DAC_LPTIM1_IRQn 0 */
 
   /* USER CODE END TIM6_DAC_LPTIM1_IRQn 0 */
-  HAL_LPTIM_IRQHandler(&hlptim1);
+  HAL_LPTIM_IRQHandler(TRACSENS_IO_GetHandle());
   /* USER CODE BEGIN TIM6_DAC_LPTIM1_IRQn 1 */
 
   /* USER CODE END TIM6_DAC_LPTIM1_IRQn 1 */
