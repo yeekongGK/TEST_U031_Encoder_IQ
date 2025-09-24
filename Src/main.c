@@ -4,7 +4,7 @@
   * @file    PWR/PWR_STOP1/Src/main.c
   * @author  MCD Application Team
   * @brief   This sample code shows how to use STM32U0xx PWR HAL API to enter
-  *          and exit the STOP 1 mode.
+  * and exit the STOP 1 mode.
   ******************************************************************************
   * @attention
   *
@@ -79,7 +79,16 @@ static PULSER_CounterMode_t eMode= NORMAL_CounterMode;
 static uint16_t uwCompareValue;
 
 static PULSER_CounterDirection_t eCounterDirection= UNKNOWN_CounterDirection;
-static int32_t lCntrMultiplier= 0;
+// This variable acts as the upper 16-bits of our 32-bit counter.
+// It's incremented on overflow and decremented on underflow.
+static volatile int32_t lCntrMultiplier= 0;
+
+// Variables to store the cumulative forward and backward counts
+static int32_t lForwardCount = 0;
+static int32_t lBackwardCount = 0;
+// Stores the last known absolute counter value to calculate the delta
+static int32_t lLastCounterValue = 0;
+
 static int32_t lCntrErrorReading= 0;
 
 typedef enum
@@ -106,7 +115,9 @@ typedef struct
 	bool rteErrorPatternJustStarted;
 }TRACSENS_t;
 
-static TRACSENS_t *pConfig;
+static TRACSENS_t tracsense_config; // Static instance
+static TRACSENS_t *pConfig = &tracsense_config; // Pointer to the instance
+
 
 /* USER CODE END PV */
 
@@ -152,7 +163,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  pConfig->enableErrorPatternCheck = false; // Initialize to a known state
   /* Configure LED4 */
   BSP_LED_Init(LED4);
   /* USER CODE END Init */
@@ -191,7 +202,10 @@ int main(void)
   
 	uint32_t value = LL_LPTIM_OC_GetCompareCH1(LPTIM1);
   
-  UART_Printf("main start %d\r\n",value);
+  UART_Printf("main start %ld\r\n",value);
+  
+  // Initialize the last counter value on startup
+  lLastCounterValue = TRACSENS_GetCounter();
   TRACSENS_DisplayInfo();
   //==========================================================
 
@@ -442,35 +456,70 @@ static void MX_GPIO_Init(void)
 
 //===========================================================
 
+/**
+  * @brief  Calculates and displays the current, cumulative forward, and cumulative backward counts.
+  * @note   This function calculates the change (delta) in position since its last execution.
+  * It then updates the respective forward or backward cumulative counters.
+  * @param  None
+  * @retval None
+  */
 void TRACSENS_DisplayInfo(void)
 {
-	static int32_t _prevPulse= 0;
-	int32_t _currPulse= TRACSENS_GetCounter();
-//	if(_prevPulse!= _currPulse)
-//	{
-//		_prevPulse= _currPulse;
-
-		UART_Printf("#stat:mag2: display > curr: %d errCnt: %d errState: %d errPulse: %d\r\n",
-				_currPulse, pConfig->rteErrorPatternCount, pConfig->rteErrorPatternState, pConfig->rteErrorPatternPreviousPulse);
-//	}
+	// Get the current absolute 32-bit position
+	int32_t current_value = TRACSENS_GetCounter();
+	
+	// Calculate the change in position since the last time this function was called
+	int32_t delta = current_value - lLastCounterValue;
+	
+	if (delta > 0)
+	{
+		// If delta is positive, the movement was forward
+		lForwardCount += delta;
+	}
+	else if (delta < 0)
+	{
+		// If delta is negative, the movement was backward. Add the absolute value.
+		lBackwardCount += -delta;
+	}
+	
+	// Update the last counter value for the next calculation
+	lLastCounterValue = current_value;
+	
+	UART_Printf("Current: %ld, Forward: %ld, Backward: %ld\r\n",
+			current_value, lForwardCount, lBackwardCount);
 }
 
+/**
+  * @brief  Gets the full 32-bit encoder counter value.
+  * @note   This function atomically reads the hardware counter and software multiplier
+  * to prevent race conditions, returning the combined absolute position.
+  * @param  None
+  * @retval The 32-bit signed encoder position.
+  */
 static int32_t TRACSENS_GetCounter(void)
 {
-	int32_t _value;
-    do/* 2 consecutive readings need to be the same*/
-    {
-    	_value= LL_LPTIM_GetCounter(LPTIM1);
-    }while(LL_LPTIM_GetCounter(LPTIM1)!= _value);
+	uint16_t hw_counter_val;
+	int32_t multiplier_val;
+	int32_t full_counter_val;
 
-//	if(INVERT_CounterMode== eMode)
-//	{
-//		_value= 0xFFFF& ((TRACSENS_CFG_AUTORELOAD_VALUE+ 1)- _value);
-//	}
-//
-//    _value+= (lCntrMultiplier* (TRACSENS_CFG_AUTORELOAD_VALUE+ 1));
+	/* Reading a hardware register while an interrupt can modify a related variable (lCntrMultiplier)
+	 * can lead to a race condition. Disable interrupts briefly to ensure an atomic read of both values.
+	 */
+	__disable_irq();
 
-    return _value;
+	/* Read the 16-bit hardware counter and the 32-bit software multiplier */
+	hw_counter_val = LL_LPTIM_GetCounter(LPTIM1);
+	multiplier_val = lCntrMultiplier;
+
+	/* Re-enable interrupts */
+	__enable_irq();
+
+	/* Combine the multiplier (upper bits) and the hardware counter (lower bits)
+	 * to get the full 32-bit position. (TRACSENS_CFG_AUTORELOAD_VALUE is 0xFFFF, so +1 gives 65536)
+	 */
+	full_counter_val = (multiplier_val * (TRACSENS_CFG_AUTORELOAD_VALUE + 1)) + hw_counter_val;
+
+    return full_counter_val;
 }
 
 void TRACSENS_CompareCallback(LPTIM_HandleTypeDef *hlptim)
@@ -480,79 +529,80 @@ void TRACSENS_CompareCallback(LPTIM_HandleTypeDef *hlptim)
 	{
 		eCounterDirection= FORWARD_CounterDirection;
 	}
-
-	//DBG_Print("CompareCallback:%d, multiplier:%d \r\n", eCounterDirection, lCntrMultiplier);
 }
 
+/**
+  * @brief  LPTIM Counter direction change to UP callback in Interrupt context.
+  * @note   This function is called when the encoder direction changes to forward (counting up).
+  * It's responsible for setting the global direction state.
+  * @param  hlptim : LPTIM handle
+  * @retval None
+  */
 void TRACSENS_CounterChangedToUpCallback(LPTIM_HandleTypeDef *hlptim)
 {
-	UART_Printf("TRACSENS_CounterChangedToUpCallback\n\r");
-	eCounterDirection= FORWARD_CounterDirection;
+	/* The hardware has detected the counting direction is now UP (forward). */
+	/* We record this state so the AutoReload callback knows how to handle a wrap-around. */
+	eCounterDirection = FORWARD_CounterDirection;
 
-	if(true== pConfig->enableErrorPatternCheck)
+	if(true == pConfig->enableErrorPatternCheck)
 	{
 		TRACSENS_ChangedToUpErrorHandling();
 	}
-
-	//DBG_Print("CounterChangedToUpCallback:%d, multiplier:%d \r\n", eCounterDirection, lCntrMultiplier);
+	// UART_Printf("Direction changed to UP (Forward)\r\n"); // Optional: can be noisy
 }
 
+/**
+  * @brief  LPTIM Counter direction change to DOWN callback in Interrupt context.
+  * @note   This function is called when the encoder direction changes to backward (counting down).
+  * It's responsible for setting the global direction state.
+  * @param  hlptim : LPTIM handle
+  * @retval None
+  */
 void TRACSENS_CounterChangedToDownCallback(LPTIM_HandleTypeDef *hlptim)
 {
-	UART_Printf("TRACSENS_CounterChangedToDownCallback\n\r");
-	eCounterDirection= BACKWARD_CounterDirection;
+	/* The hardware has detected the counting direction is now DOWN (backward). */
+	/* We record this state so the AutoReload callback knows how to handle a wrap-around. */
+	eCounterDirection = BACKWARD_CounterDirection;
 
-	if(true== pConfig->enableErrorPatternCheck)
+	if(true == pConfig->enableErrorPatternCheck)
 	{
 		TRACSENS_ChangedToDownErrorHandling();
 	}
-
-	//DBG_Print("CounterChangedToDownCallback:%d, multiplier:%d \r\n", eCounterDirection, lCntrMultiplier);
+	// UART_Printf("Direction changed to DOWN (Backward)\r\n"); // Optional: can be noisy
 }
 
+/**
+  * @brief  LPTIM Auto-Reload Match callback in Interrupt context.
+  * @note   This function is called when the LPTIM counter overflows (counts past 0xFFFF)
+  * or underflows (counts below 0x0000). It extends the 16-bit hardware
+  * counter to a 32-bit software counter using lCntrMultiplier.
+  * @param  hlptim : LPTIM handle
+  * @retval None
+  */
 void TRACSENS_AutoReloadMatchCallback(LPTIM_HandleTypeDef *hlptim)
 {
-	UART_Printf("TRACSENS_AutoReloadMatchCallback\n\r");
-	if(UNKNOWN_CounterDirection== eCounterDirection)/*initially we don't know. we choose backward cos we have a compare int to choose forward*/
-	{
-		eCounterDirection= BACKWARD_CounterDirection;
-	}
+  /* This callback is triggered when the counter wraps around.
+   * We check the last known direction, set by the Up/Down callbacks,
+   * to determine if it was an overflow or an underflow.
+   */
+  if (eCounterDirection == FORWARD_CounterDirection)
+  {
+    /* OVERFLOW: If counting forward, a wrap-around from 0xFFFF to 0x0000 has occurred.
+     * Increment the multiplier to extend the counter's upper bits.
+     */
+    lCntrMultiplier++;
+  }
+  else if (eCounterDirection == BACKWARD_CounterDirection)
+  {
+    /* UNDERFLOW: If counting backward, a wrap-around from 0x0000 to 0xFFFF has occurred.
+     * Decrement the multiplier.
+     */
+    lCntrMultiplier--;
+  }
 
-	/*check and set cos sometimes direction interrupt will occur simultaneously with ARR interrupt, but served after ARR*/
-	if(LL_LPTIM_IsActiveFlag_UP(LPTIM1))
-	{
-		if(NORMAL_CounterMode== eMode)
-		{
-			eCounterDirection= FORWARD_CounterDirection;
-		}
-		else if(INVERT_CounterMode== eMode)
-		{
-			eCounterDirection= BACKWARD_CounterDirection;
-		}
-	}
-	else if(LL_LPTIM_IsActiveFlag_DOWN(LPTIM1))
-	{
-		if(NORMAL_CounterMode== eMode)
-		{
-			eCounterDirection= BACKWARD_CounterDirection;
-		}
-		else if(INVERT_CounterMode== eMode)
-		{
-			eCounterDirection= FORWARD_CounterDirection;
-		}
-	}
-
-	if(FORWARD_CounterDirection== eCounterDirection)
-	{
-		lCntrMultiplier++;
-	}
-	else if(BACKWARD_CounterDirection== eCounterDirection)
-	{
-		lCntrMultiplier--;
-	}
-
-	//DBG_Print("AutoReloadMatchCallback:%d, multiplier:%d \r\n", eCounterDirection, lCntrMultiplier);
+  // UART_Printf("AutoReloadMatchCallback: Dir=%d, Multiplier=%ld\r\n", eCounterDirection, lCntrMultiplier); // Optional: can be noisy
 }
+
 void TRACSENS_StartCounting()
 {
 	TRACSENS_Power(true);
@@ -574,20 +624,17 @@ void TRACSENS_StartCounting()
 
 	uwCompareValue=0x01;/*used once to detect direction*/
 
-//	LL_LPTIM_EnableIT_CC1(LPTIM1);		/*Enable the Compare Match interrupt for Channel 1 */
-//	LL_LPTIM_EnableIT_ARRM(LPTIM1); 	/*Enable autoreload match interrupt (ARRMIE).*/
-//	LL_LPTIM_EnableIT_UP(LPTIM1);		/*Enable direction change to up interrupt (UPIE).*/
-//	LL_LPTIM_EnableIT_DOWN(LPTIM1);		/*Enable direction change to down interrupt (DOWNIE).*/
+	LL_LPTIM_EnableIT_ARRM(LPTIM1); 	/*Enable autoreload match interrupt (ARRMIE).*/
+	LL_LPTIM_EnableIT_UP(LPTIM1);		/*Enable direction change to up interrupt (UPIE).*/
+	LL_LPTIM_EnableIT_DOWN(LPTIM1);		/*Enable direction change to down interrupt (DOWNIE).*/
 
 	LL_LPTIM_OC_SetCompareCH1(LPTIM1, 11);
-//	LL_LPTIM_SetCompare(LPTIM1, uwCompareValue);/*we need this to know the initial pulse direction(which we don't know after reset)*/
 
 	LL_LPTIM_SetEncoderMode(LPTIM1, LL_LPTIM_ENCODER_MODE_RISING_FALLING);
     LL_LPTIM_EnableEncoderMode(LPTIM1);
     LL_LPTIM_Enable(LPTIM1);
 	LL_LPTIM_SetAutoReload(LPTIM1, TRACSENS_CFG_AUTORELOAD_VALUE);
     LL_LPTIM_StartCounter(LPTIM1, LL_LPTIM_OPERATING_MODE_CONTINUOUS);
-    //LPTIM_FeedExternalClock();/*needed when using external clock in counter mode*/
 
     /*this is needed during power up as we always get extra pulse a bit while after start counting*/
 	HAL_Delay(1);	/*when reboot, we get extra pulse*/
@@ -596,8 +643,6 @@ void TRACSENS_StartCounting()
     {
     	lCntrErrorReading= LL_LPTIM_GetCounter(LPTIM1);
     }while(LL_LPTIM_GetCounter(LPTIM1)!= lCntrErrorReading);
-
-	//DBG_Print("lCntrErrorReading: %d.\r\n", lCntrErrorReading);
 }
 
 void TRACSENS_ChangedToUpErrorHandling(void)
@@ -619,7 +664,6 @@ void TRACSENS_ChangedToDownErrorHandling(void)
 		if(false== pConfig->rteErrorPatternCompensationStarted)
 		{
 			pConfig->rteErrorPatternCount= 0;/*we need consecutive error pattern to mark the meter as erroneous that we can handle*/
-			//DBG_Print("#stat:mag2: errorPatternCountCleared >\r\n");
 		}
 	}
 	if(NONE_CounterErrorState== pConfig->rteErrorPatternState)
@@ -643,7 +687,6 @@ void TRACSENS_ChangedToDownErrorHandling(void)
 		if((false== pConfig->rteErrorPatternCompensationStarted)&& (pConfig->errorPatternConfirmationCount<= pConfig->rteErrorPatternCount))
 		{
 			pConfig->rteErrorPatternCompensationStarted= true;
-			//DBG_Print("#stat:mag2: errorPatternCompensationStarted > \r\n");
 		}
 		pConfig->rteErrorPatternState= BWD_EXPECTING_FWD_CounterErrorState;
 	}
@@ -657,7 +700,7 @@ static void TRACSENS_Power(bool _enable)
 
 /**
   * @brief  Configures system clock after wake-up from STOP: enable HSE, PLL
-  *         and select PLL as system clock source.
+  * and select PLL as system clock source.
   * @param  None
   * @retval None
   */
@@ -765,7 +808,7 @@ void Error_Handler(void)
 #ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
+  * where the assert_param error has occurred.
   * @param  file: pointer to the source file name
   * @param  line: assert_param error line source number
   * @retval None
@@ -783,3 +826,4 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
