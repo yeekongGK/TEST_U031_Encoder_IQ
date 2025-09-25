@@ -62,8 +62,8 @@ all: main-build
 main-build: PWR_SHUTDOWN.elf secondary-outputs
 
 # Tool invocations
-PWR_SHUTDOWN.elf PWR_SHUTDOWN.map: $(OBJS) $(USER_OBJS) C:\Users\yee-kong.chong\Documents\Development\STM32_ExampleCode\STM32Cube_FW_U0_V1.3.0\Projects\NUCLEO-U031R8\Examples\PWR\PWR_SHUTDOWN_Copy\STM32CubeIDE\STM32U031R8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "PWR_SHUTDOWN.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"C:\Users\yee-kong.chong\Documents\Development\STM32_ExampleCode\STM32Cube_FW_U0_V1.3.0\Projects\NUCLEO-U031R8\Examples\PWR\PWR_SHUTDOWN_Copy\STM32CubeIDE\STM32U031R8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="PWR_SHUTDOWN.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+PWR_SHUTDOWN.elf PWR_SHUTDOWN.map: $(OBJS) $(USER_OBJS) C:\Users\yee-kong.chong\STM32CubeIDE\workspace_U031\PWR_SHUTDOWN_Copy1\STM32CubeIDE\STM32U031R8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "PWR_SHUTDOWN.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"C:\Users\yee-kong.chong\STM32CubeIDE\workspace_U031\PWR_SHUTDOWN_Copy1\STM32CubeIDE\STM32U031R8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="PWR_SHUTDOWN.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
